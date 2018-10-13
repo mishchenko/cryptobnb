@@ -1,0 +1,317 @@
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>CryptoBnB</title>
+  <!--<script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js/dist/web3.min.js"></script>-->
+  <script src="/node_modules/web3/dist/web3.js"></script>
+  <script src="/node_modules/truffle-contract/dist/truffle-contract.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script>
+
+    let web3Provider;
+    let propertyContract,propertyRegistryContract;
+    let alice,bob;
+
+    async function initWeb3() {
+      if (typeof web3 !== 'undefined') {
+        // this will work if a web3 instance has been injected
+        // such is the case with Metamask
+        web3Provider = web3.currentProvider;
+      }
+      else {
+        // but for our purpose we'll connect to truffle
+        web3Provider = new Web3.providers.HttpProvider('http://localhost:8545');
+      }
+      window.web3 = new Web3(web3Provider);
+    }
+
+    async function getContract(json, web3 = window.web3) {
+      const contract = TruffleContract(json);
+      contract.setProvider(web3.currentProvider);
+      return contract.deployed();
+    }
+
+    function attachEvents(){
+      /**
+      const propertyEvent = propertyContract.allEvents({ fromBlock: 0, toBlock: 'latest' });
+      propertyEvent.watch((err, res) => {
+        if (err)
+          console.log('watch error', err)
+        else
+          console.log('got an event', res)
+      });
+
+      const registryEvent = propertyRegistryContract.allEvents({ fromBlock: 0, toBlock: 'latest' });
+      registryEvent.watch((err, res) => {
+        if (err)
+          console.log('watch error', err)
+        else
+          console.log('got an event', res)
+      });
+      */
+    }
+
+    async function bindOwners(){
+      $.each(web3.eth.accounts, function(index, value){
+          $("#ddlOwners").append("<option text='" + value + "'>" + value + "</option>");
+      });
+    }
+
+    async function updateUI(){
+      buildRegistryTable();
+      buildMyPropertiesTable();
+      buildMyRequests();
+      buildManagePropertiesTable();
+    }
+
+    async function buildRegistryTable(){
+      $("#divProperties").html("<tr><td >Property Address</td><td>Property URI</td><td>Reserve</td></tr>")
+
+      var tokenIds = await propertyContract.getAllProperties();
+      $.each(tokenIds, async(index, value) => {
+        let stayData = await propertyRegistryContract.getStayData(value, 0x0);
+        if (stayData[0].toNumber() > 0){
+          $("#divProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td>" +
+          "<td><a href='#' onclick='getUri(" + value + ")'>view</a></td>" +
+          "<td><input type='text' value='15 Oct 2018' id=\"start_" + value + "\"></input> - <input type='text' value='20 Oct 2018' id=\"end_" + value + "\"></input>" +
+          "<a href='#' onclick='request(" + value + ")'>reserve for " + stayData[0].toString() + "</a></td></tr>");
+        }
+        else {
+          $("#divProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td><td><a href='#' onclick='getUri(" + value + ")'>view</a></td><td>pending</td></tr>");
+        }
+      });
+    }
+
+    async function buildMyPropertiesTable(){
+      $("#divMyProperties").html("<tr><td >Property Address</td><td>price</td><td>Register</td></tr>")
+      let tokenIds = await propertyContract.getProperties({
+        from: $("#ddlOwners").val()
+      });
+
+      $("#divMyProperties").parent().parent().css("display", "none");
+      $.each(tokenIds, async(index, value) => {
+        let stayData = await propertyRegistryContract.getStayData(value, $("#ddlOwners").val());
+
+        if (stayData[0].toNumber() == 0){
+          $("#divMyProperties").parent().parent().css("display", "block");
+          $("#divMyProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td><td><input id=\"price_" + value + "\" type='text' value=\"100\"></input></td>" +
+           "<td><button id=\"register_" + value + "\" text=\"Register\" onclick='registerProperty(" + value + ")'>Register</button></td></tr>");
+        }
+      });
+    }
+
+    async function buildManagePropertiesTable(){
+      $("#divManageProperties").html("<tr><td >Property Address</td><td>guest</td><td>From - To</td><td>Register</td></tr>")
+      let tokenIds = await propertyContract.getProperties({
+        from: $("#ddlOwners").val()
+      });
+
+      $("#divManageProperties").parent().parent().css("display", "none");
+      $.each(tokenIds, async(index, value) => {
+        let stayData = await propertyRegistryContract.getStayData(value, $("#ddlOwners").val());
+
+        if (stayData[0].toNumber() > 0){
+          let notApproved = "";
+
+          for(var i = 0; i < stayData[3].length; i++){ //loop through requested
+            if ($.inArray(stayData[3][i], stayData[4]) == -1) //address is in requested[] but not in approved[]
+            {
+              let guestData = await propertyRegistryContract.getStayData(value, stayData[3][i]);
+              $("#divManageProperties").parent().parent().css("display", "block");
+              $("#divManageProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + stayData[3][i] + "</td>" +
+              "<td>From " + (new Date(guestData[1]* 1000)).toLocaleDateString("en-US") + " : To " + (new Date(guestData[2]* 1000)).toLocaleDateString("en-US") + "</td>" +
+              "<td><button id=\"register_" + value + "\" text=\"Register\" onclick='approveRequest(" + value + ",\"" + stayData[3][i] + "\")'>Approve</button></td></tr>");
+            }
+          }
+        }
+      });
+    }
+
+    async function buildMyRequests(){
+      $("#divRequests").html("<tr><td >Property Address</td><td>Status</td></tr>")
+
+      var tokenIds = await propertyContract.getAllProperties();
+      $("#divRequests").parent().parent().css("display", "none");
+      $.each(tokenIds, async(index, value) => {
+        let stayData = await propertyRegistryContract.getStayData(value, $("#ddlOwners").val());
+
+        if (stayData[0].toNumber() > 0){
+          let status = "";
+
+          if ($.inArray($("#ddlOwners").val(), stayData[3]) >= 0)
+              status = "requested";
+          if ($.inArray($("#ddlOwners").val(), stayData[4]) >= 0)
+              status = "approved";
+          if ($.inArray($("#ddlOwners").val(), stayData[5]) >= 0)
+            status = "checked in";
+
+          if (status != ""){
+            $("#divRequests").parent().parent().css("display", "block");
+            $("#divRequests").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + status  + "</td><td>check in / check out</td></tr>");
+          }
+        }
+      });
+    }
+
+    async function getUri(tokenId){
+      var uri = await propertyContract.getURI(tokenId);
+      alert(uri == "" ? "not set" : uri);
+    }
+
+    async function setPropertyURI(){
+      try {
+        //get onwers tokenI
+        let allTokens = await propertyContract.getProperties({
+          from: $("#ddlOwners").val()
+        });
+        let lastToken = Math.max.apply(Math, allTokens);
+
+        const tx = await propertyContract.setURI(lastToken, $("#newURI").val(), {
+          from: $("#ddlOwners").val(),
+          gas: 250000
+        });
+        console.log(tx);
+
+      } catch(e) {
+        console.log(e);
+        alert('Error setting property URI', e)
+      }
+    }
+
+    async function createProperty(){
+      try {
+        const tx = await propertyContract.createProperty({
+          from: $("#ddlOwners").val(),
+          gas: 250000
+        });
+        console.log(tx);
+
+        await setPropertyURI();
+
+        updateUI();
+
+      } catch(e) {
+        console.log(e);
+        alert('Error creating property', e)
+      }
+    }
+
+    async function registerProperty(tokenId){
+      let price = $("#price_" + tokenId).val();
+
+      let tx = await propertyRegistryContract.registerProperty(tokenId, price, {
+        from: $("#ddlOwners").val()
+      })
+
+      updateUI();
+    }
+
+    async function request(tokenId){
+      try {
+      var checkIn = (new Date($("#start_" + tokenId).val())).getTime() / 1000;
+      var checkOut = (new Date($("#end_" + tokenId).val())).getTime() / 1000;
+      }catch(e){
+        alert("date should be in DD MMM YYYY format");
+        return;
+      }
+
+      try {
+        let tx = await propertyRegistryContract.request(tokenId, checkIn, checkOut, {
+          from: $("#ddlOwners").val(),
+          gas: 250000
+        })
+        updateUI();
+      }catch(e){
+        alert('Reservation failed' + e);
+      }
+    }
+
+    async function approveRequest(tokenId, guestAddress){
+      try {
+        let tx = await propertyRegistryContract.approveRequest(tokenId, guestAddress, {
+          from: $("#ddlOwners").val(),
+          gas: 250000
+        })
+        updateUI();
+      }catch(e){
+        alert('Reservation failed: ' + e);
+      }
+    }
+
+    $(document).ready(async() => {
+      console.log('start');
+      await initWeb3();
+
+      let json = await fetch('../build/contracts/Property.json').then((res) => res.json());
+      propertyContract = await getContract(json);
+
+      json = await fetch('../build/contracts/PropertyRegistry.json').then((res) => res.json());
+      propertyRegistryContract = await getContract(json);
+
+      attachEvents();
+      await bindOwners();
+      updateUI();
+
+      let propName = await propertyContract.name();
+      let propAddress = await propertyContract.address;
+      $("#output").text(propName + " : " + propAddress);
+
+      $("#btnCreateProperty").click(createProperty);
+      $("#ddlOwners").change(function(){
+        updateUI();
+      });
+    });
+
+  </script>
+</head>
+
+<body>
+  <div id="output"></div>
+  <br>
+
+  <p>You are logged in as <select id="ddlOwners"></select></p>
+  <hr/>
+  <div>
+    <!-- VIEW ALL PROPERTIES -->
+    <h2>View All Properties</h2>
+    <div>
+      <table id="divProperties"></table>
+    </div>
+    <br/><br/>
+    <hr/>
+    <!-- VIEW MY REQUESTS -->
+    <div>
+      <h2>View My Requests</h2>
+      <div>
+        <table id="divRequests"></table>
+      </div>
+      <br/><br/>
+      <hr/>
+    </div>
+    <!-- REGISTER PROPERTY -->
+    <div>
+      <h2>Register My Property</h2>
+      <div>
+        <table id="divMyProperties"></table>
+      </div>
+      <hr/>
+    </div>
+    <!-- MANAGE MY PROPERTIES -->
+    <div>
+      <h2>Manage My Properties</h2>
+      <div>
+        <table id="divManageProperties"></table>
+      </div>
+      <hr/>
+    </div>
+    <!-- CREATE PROPERTY -->
+    <h2>
+      Create Property
+    </h2>
+    <div>
+      URI: <input id='newURI' type='text'></input><button id="btnCreateProperty">Create Property</button>
+    </div>
+  </div>
+</body>
+</html>

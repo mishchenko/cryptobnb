@@ -1,0 +1,94 @@
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>CryptoBnB</title>
+  <!--<script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js/dist/web3.min.js"></script>-->
+  <script src="/node_modules/web3/dist/web3.js"></script>
+  <script src="/node_modules/truffle-contract/dist/truffle-contract.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script>
+
+    let web3Provider;
+    let propertyContract;
+    let alice,bob;
+
+    async function initWeb3() {
+      if (typeof web3 !== 'undefined') {
+        // this will work if a web3 instance has been injected
+        // such is the case with Metamask
+        web3Provider = web3.currentProvider;
+      }
+      else {
+        // but for our purpose we'll connect to truffle
+        web3Provider = new Web3.providers.HttpProvider('http://localhost:8545');
+      }
+      window.web3 = new Web3(web3Provider);
+    }
+
+    async function getContract(json, web3 = window.web3) {
+      const contract = TruffleContract(json);
+      contract.setProvider(web3.currentProvider);
+      return contract.deployed();
+    }
+
+    function attachEvents(){
+      const event = propertyContract.allEvents({ fromBlock: 0, toBlock: 'latest' });
+      event.watch((err, res) => {
+        if (err)
+          console.log('watch error', err)
+        else
+          console.log('got an event', res)
+      });
+    }
+
+    $(document).ready(async() => {
+      console.log('start');
+      await initWeb3();
+
+      const json = await fetch('../build/contracts/Property.json').then((res) => res.json());
+      propertyContract = await getContract(json);
+
+      attachEvents();
+
+      alice = web3.eth.accounts[0];
+      bob = web3.eth.accounts[1];
+
+      let contractName = await propertyContract.name();
+      let contractAddress = await propertyContract.address;
+      $("#output").text(contractName + " : " + contractAddress);
+
+      
+
+      /*
+      $("#btnCreateProperty").click(async() => {
+        try {
+          const tx = await propertyContract.createProperty({
+            from: bob,
+            gas: 250000
+          });
+          console.log(tx);
+          console.log('Property Created for Alice');
+        } catch(e) {
+          console.log(e);
+          alert('Error creating property', e)
+        }
+      });
+      **/
+    });
+
+  </script>
+</head>
+
+<body>
+  <div id="output"></div>
+  <br>
+  <div>
+    <h2>View Properties</h2>
+    <div id="divProperties">
+
+    </div>
+  </div>
+  <!-- <button id="btnCreateProperty">Create Property</button> -->
+</body>
+</html>
