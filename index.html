@@ -10,7 +10,7 @@
   <script>
 
     let web3Provider;
-    let propertyContract,propertyRegistryContract;
+    let propertyContract,propertyRegistryContract, propertyTokenContract;
     let alice,bob;
 
     async function initWeb3() {
@@ -124,6 +124,23 @@
               "<td><button id=\"register_" + value + "\" text=\"Register\" onclick='approveRequest(" + value + ",\"" + stayData[3][i] + "\")'>Approve</button></td></tr>");
             }
           }
+          for(var i = 0; i < stayData[4].length; i++){ //loop through approved
+            if ($.inArray(stayData[4][i], stayData[5]) == -1) //address is in approved[] but not in occupants[]
+            {
+              let guestData = await propertyRegistryContract.getStayData(value, stayData[4][i]);
+              $("#divManageProperties").parent().parent().css("display", "block");
+              $("#divManageProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + stayData[4][i] + "</td>" +
+              "<td>From " + (new Date(guestData[1]* 1000)).toLocaleDateString("en-US") + " : To " + (new Date(guestData[2]* 1000)).toLocaleDateString("en-US") + "</td>" +
+              "<td>Approved</td></tr>");
+            }
+          }
+          for(var i = 0; i < stayData[5].length; i++){ //loop through approved
+            let guestData = await propertyRegistryContract.getStayData(value, stayData[5][i]);
+            $("#divManageProperties").parent().parent().css("display", "block");
+            $("#divManageProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + stayData[5][i] + "</td>" +
+            "<td>From " + (new Date(guestData[1]* 1000)).toLocaleDateString("en-US") + " : To " + (new Date(guestData[2]* 1000)).toLocaleDateString("en-US") + "</td>" +
+            "<td>Checked in</td></tr>");
+          }
         }
       });
     }
@@ -146,9 +163,17 @@
           if ($.inArray($("#ddlOwners").val(), stayData[5]) >= 0)
             status = "checked in";
 
-          if (status != ""){
+          if (status == "approved"){
             $("#divRequests").parent().parent().css("display", "block");
-            $("#divRequests").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + status  + "</td><td>check in / check out</td></tr>");
+            $("#divRequests").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + status  + "</td><td><a href='#' onclick='checkIn(" + value + ", " + stayData[0].toNumber() + ")'>check in</a></td></tr>");
+          }
+          else if (status == "checked in"){
+            $("#divRequests").parent().parent().css("display", "block");
+            $("#divRequests").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + status  + "</td><td> <a href='#' onclick='checkOut(\"" + value + "\")'>check out</a></td></tr>");
+          }
+          else if (status != ""){
+            $("#divRequests").parent().parent().css("display", "block");
+            $("#divRequests").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + status  + "</td><td></td></tr>");
           }
         }
       });
@@ -223,7 +248,7 @@
         })
         updateUI();
       }catch(e){
-        alert('Reservation failed' + e);
+        alert('Request failed' + e);
       }
     }
 
@@ -235,7 +260,36 @@
         })
         updateUI();
       }catch(e){
-        alert('Reservation failed: ' + e);
+        alert('Approval failed: ' + e);
+      }
+    }
+
+    async function checkIn(tokenId, price){
+      //_mint
+      try {
+        await propertyTokenContract.mint($("#ddlOwners").val(), 1000, {from: web3.eth.accounts[0]});
+        await propertyTokenContract.approve(propertyRegistryContract.address, price, {from: $("#ddlOwners").val()});
+
+        let tx = await propertyRegistryContract.checkIn(tokenId, {
+          from: $("#ddlOwners").val(),
+          gas: 250000
+        })
+        updateUI();
+      }catch(e){
+        alert('Check In failed: ' + e);
+      }
+    }
+
+    async function checkOut(tokenId){
+      //_mint
+      try {
+        let tx = await propertyRegistryContract.checkOut(tokenId, {
+          from: $("#ddlOwners").val(),
+          gas: 250000
+        })
+        updateUI();
+      }catch(e){
+        alert('Check out failed: ' + e);
       }
     }
 
@@ -248,6 +302,9 @@
 
       json = await fetch('../build/contracts/PropertyRegistry.json').then((res) => res.json());
       propertyRegistryContract = await getContract(json);
+
+      json = await fetch('../build/contracts/PropertyToken.json').then((res) => res.json());
+      propertyTokenContract = await getContract(json);
 
       attachEvents();
       await bindOwners();

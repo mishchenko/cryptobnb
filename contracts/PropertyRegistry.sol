@@ -77,8 +77,9 @@ contract PropertyRegistry {
     require(stayData[_tokenId].price > 0, "tokenId is invalid");
     require(isInArray(stayData[_tokenId].approved, msg.sender), "is not an approved address");
     require(!isInArray(stayData[_tokenId].occupants, msg.sender), "is already checked in");
+
     //reserve funds
-    require(propertyToken.transferFrom(msg.sender, this, stayData[_tokenId].price));
+    require(propertyToken.transferFrom(msg.sender, this, stayData[_tokenId].price), "not enough tokens");
 
     //validate CheckIn time
     require(stayData[_tokenId].requests[msg.sender].checkIn < now, "too early to check in");
