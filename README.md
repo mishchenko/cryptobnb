@@ -1,18 +1,23 @@
 cryptobnb
 W6D2
 
-to test:
-> ganage-cli -i 1234
+TO RUN: 
+
+cmd:
+1. > ganage-cli -i 1234
+
 new cmd: 
-> truffle console --network development
-> compile
-> migrate --reset
-> test
+2. > truffle console --network development
+3. > compile
+4. > migrate --reset
+5. > test
+
 new cmd: 
-> node server
+6. > node server
+
 browser: 
-> open localhost:8000/index.html
-> make sure metamask is disabled
+7. > open localhost:8000/index.html
+make sure metamask is disabled
 
 Sorry, didn't have enough time to properly complete frontend and format everything. It has been 4-5 years since I've done any front end dev work :(
 
