@@ -12,16 +12,22 @@
     let web3Provider;
     let propertyContract,propertyRegistryContract, propertyTokenContract;
     let alice,bob;
+    var data;
+    let owner;
 
     async function initWeb3() {
       if (typeof web3 !== 'undefined') {
         // this will work if a web3 instance has been injected
         // such is the case with Metamask
         web3Provider = web3.currentProvider;
+        owner = web3.eth.accounts[0];
+        $("#ddlOwners").css("display","none");
       }
       else {
         // but for our purpose we'll connect to truffle
         web3Provider = new Web3.providers.HttpProvider('http://localhost:8545');
+        owner = $("#ddlOwners").val();
+        $("#ddlOwners").css("display","block");
       }
       window.web3 = new Web3(web3Provider);
     }
@@ -56,88 +62,116 @@
       $.each(web3.eth.accounts, function(index, value){
           $("#ddlOwners").append("<option text='" + value + "'>" + value + "</option>");
       });
+
+      if ($("#ddlOwners").css("display") == "block"){
+        owner = $("#ddlOwners").val();
+      }
     }
 
     async function updateUI(){
-      buildRegistryTable();
-      buildMyPropertiesTable();
-      buildMyRequests();
-      buildManagePropertiesTable();
+      $("#divMyProperties").parent().parent().css("display", "none");
+      $("#divManageProperties").parent().parent().css("display", "none");
+      $("#divRequests").parent().parent().css("display", "none");
+
+      data = {};
+      data.tokenIds = await propertyContract.getAllProperties();
+      data.myTokenIds = await propertyContract.getProperties({from: owner});
+      data.allProperties = [];
+      data.ownerProperties = [];
+
+      //POPULATE ALL PROPERTY DATA
+      await $.each(data.tokenIds, async(index, value) => {
+        let item = await propertyRegistryContract.getStayData(value);
+        item[5] = value;
+        data.allProperties.push(item);
+
+        if (index == data.tokenIds.length - 1){
+          buildRegistryTable();
+          buildMyRequests();
+        }
+      });
+
+      //POPULATE MY MANAGED PROPERTIES
+      await $.each(data.myTokenIds, async(index, value) => {
+        let item = await propertyRegistryContract.getStayDataDetails(value, owner);
+        item[6] = value;
+        data.ownerProperties.push(item);
+
+        if (index == data.myTokenIds.length - 1){
+          buildManagePropertiesTable();
+          buildMyPropertiesTable();
+        }
+      });
+
     }
 
     async function buildRegistryTable(){
-      $("#divProperties").html("<tr><td >Property Address</td><td>Property URI</td><td>Reserve</td></tr>")
+      $("#divProperties").html("<tr><td >Property Address</td><td>Property URI</td><td>Reserve</td><td>Stays</td></tr>")
 
-      var tokenIds = await propertyContract.getAllProperties();
-      $.each(tokenIds, async(index, value) => {
-        let stayData = await propertyRegistryContract.getStayData(value, 0x0);
-        if (stayData[0].toNumber() > 0){
-          $("#divProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td>" +
-          "<td><a href='#' onclick='getUri(" + value + ")'>view</a></td>" +
-          "<td><input type='text' value='15 Oct 2018' id=\"start_" + value + "\"></input> - <input type='text' value='20 Oct 2018' id=\"end_" + value + "\"></input>" +
-          "<a href='#' onclick='request(" + value + ")'>reserve for " + stayData[0].toString() + "</a></td></tr>");
+      $.each(data.allProperties, async(index, value) => {
+        let stay = data.allProperties[index];
+        if (stay[0].toNumber() > 0){
+          $("#divProperties").append("<tr id='\"" + stay[5] + "\'><td>" + stay[5] + "</td>" +
+          "<td><a href='#' onclick='getUri(" + stay[5] + ")'>view</a></td>" +
+          "<td><input type='text' value='15 Oct 2018' id=\"start_" + stay[5] + "\"></input> - <input type='text' value='20 Oct 2018' id=\"end_" + stay[5] + "\"></input>" +
+          "<a href='#' onclick='request(" + stay[5] + ")'>reserve for " + stay[0].toString() + "</a></td><td>" + stay[4].toString() + "</td></tr>");
         }
         else {
-          $("#divProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td><td><a href='#' onclick='getUri(" + value + ")'>view</a></td><td>pending</td></tr>");
+          $("#divProperties").append("<tr id='\"" + index + "\'><td>" + stay[5] + "</td><td><a href='#' onclick='getUri(" + stay[5] + ")'>view</a></td><td>pending</td><td>" + stay[4].toString() + "</td></tr>");
         }
       });
     }
 
     async function buildMyPropertiesTable(){
       $("#divMyProperties").html("<tr><td >Property Address</td><td>price</td><td>Register</td></tr>")
-      let tokenIds = await propertyContract.getProperties({
+      /*let tokenIds = await propertyContract.getProperties({
         from: $("#ddlOwners").val()
-      });
+      });**/
 
-      $("#divMyProperties").parent().parent().css("display", "none");
-      $.each(tokenIds, async(index, value) => {
-        let stayData = await propertyRegistryContract.getStayData(value, $("#ddlOwners").val());
+      $.each(data.ownerProperties, async(index, value) => {
+        //let stayData = await propertyRegistryContract.getStayDataDetails(value, owner);
+        let stayData = data.ownerProperties[index];
 
         if (stayData[0].toNumber() == 0){
           $("#divMyProperties").parent().parent().css("display", "block");
-          $("#divMyProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td><td><input id=\"price_" + value + "\" type='text' value=\"100\"></input></td>" +
-           "<td><button id=\"register_" + value + "\" text=\"Register\" onclick='registerProperty(" + value + ")'>Register</button></td></tr>");
+          $("#divMyProperties").append("<tr id='\"" + index + "\'><td>" + stayData[6] + "</td><td><input id=\"price_" + stayData[6] + "\" type='text' value=\"100\"></input></td>" +
+           "<td><button id=\"register_" + stayData[6] + "\" text=\"Register\" onclick='registerProperty(" + stayData[6] + ")'>Register</button></td></tr>");
         }
       });
     }
 
     async function buildManagePropertiesTable(){
       $("#divManageProperties").html("<tr><td >Property Address</td><td>guest</td><td>From - To</td><td>Register</td></tr>")
-      let tokenIds = await propertyContract.getProperties({
-        from: $("#ddlOwners").val()
-      });
 
-      $("#divManageProperties").parent().parent().css("display", "none");
-      $.each(tokenIds, async(index, value) => {
-        let stayData = await propertyRegistryContract.getStayData(value, $("#ddlOwners").val());
-
+      $.each(data.ownerProperties, async(index, value) => {
+        let stayData = data.ownerProperties[index];
         if (stayData[0].toNumber() > 0){
           let notApproved = "";
 
           for(var i = 0; i < stayData[3].length; i++){ //loop through requested
             if ($.inArray(stayData[3][i], stayData[4]) == -1) //address is in requested[] but not in approved[]
             {
-              let guestData = await propertyRegistryContract.getStayData(value, stayData[3][i]);
+              let guestData = await propertyRegistryContract.getStayDataDetails(stayData[6], stayData[3][i]);
               $("#divManageProperties").parent().parent().css("display", "block");
-              $("#divManageProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + stayData[3][i] + "</td>" +
+              $("#divManageProperties").append("<tr id='\"" + index + "\'><td>" + stayData[6] + "</td><td>" + stayData[3][i] + "</td>" +
               "<td>From " + (new Date(guestData[1]* 1000)).toLocaleDateString("en-US") + " : To " + (new Date(guestData[2]* 1000)).toLocaleDateString("en-US") + "</td>" +
-              "<td><button id=\"register_" + value + "\" text=\"Register\" onclick='approveRequest(" + value + ",\"" + stayData[3][i] + "\")'>Approve</button></td></tr>");
+              "<td><button id=\"register_" + stayData[6] + "\" text=\"Register\" onclick='approveRequest(" + stayData[6] + ",\"" + stayData[3][i] + "\")'>Approve</button></td></tr>");
             }
           }
           for(var i = 0; i < stayData[4].length; i++){ //loop through approved
             if ($.inArray(stayData[4][i], stayData[5]) == -1) //address is in approved[] but not in occupants[]
             {
-              let guestData = await propertyRegistryContract.getStayData(value, stayData[4][i]);
+              let guestData = await propertyRegistryContract.getStayDataDetails(stayData[6], stayData[4][i]);
               $("#divManageProperties").parent().parent().css("display", "block");
-              $("#divManageProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + stayData[4][i] + "</td>" +
+              $("#divManageProperties").append("<tr id='\"" + index + "\'><td>" + stayData[6] + "</td><td>" + stayData[4][i] + "</td>" +
               "<td>From " + (new Date(guestData[1]* 1000)).toLocaleDateString("en-US") + " : To " + (new Date(guestData[2]* 1000)).toLocaleDateString("en-US") + "</td>" +
               "<td>Approved</td></tr>");
             }
           }
           for(var i = 0; i < stayData[5].length; i++){ //loop through approved
-            let guestData = await propertyRegistryContract.getStayData(value, stayData[5][i]);
+            let guestData = await propertyRegistryContract.getStayDataDetails(stayData[6], stayData[5][i]);
             $("#divManageProperties").parent().parent().css("display", "block");
-            $("#divManageProperties").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + stayData[5][i] + "</td>" +
+            $("#divManageProperties").append("<tr id='\"" + index + "\'><td>" + stayData[6] + "</td><td>" + stayData[5][i] + "</td>" +
             "<td>From " + (new Date(guestData[1]* 1000)).toLocaleDateString("en-US") + " : To " + (new Date(guestData[2]* 1000)).toLocaleDateString("en-US") + "</td>" +
             "<td>Checked in</td></tr>");
           }
@@ -148,32 +182,30 @@
     async function buildMyRequests(){
       $("#divRequests").html("<tr><td >Property Address</td><td>Status</td></tr>")
 
-      var tokenIds = await propertyContract.getAllProperties();
-      $("#divRequests").parent().parent().css("display", "none");
-      $.each(tokenIds, async(index, value) => {
-        let stayData = await propertyRegistryContract.getStayData(value, $("#ddlOwners").val());
+      $.each(data.allProperties, async(index, value) => {
+        let stay = data.allProperties[index];
 
-        if (stayData[0].toNumber() > 0){
+        if (stay[0].toNumber() > 0){
           let status = "";
 
-          if ($.inArray($("#ddlOwners").val(), stayData[3]) >= 0)
+          if ($.inArray(owner, stay[1]) >= 0)
               status = "requested";
-          if ($.inArray($("#ddlOwners").val(), stayData[4]) >= 0)
+          if ($.inArray(owner, stay[2]) >= 0)
               status = "approved";
-          if ($.inArray($("#ddlOwners").val(), stayData[5]) >= 0)
+          if ($.inArray(owner, stay[3]) >= 0)
             status = "checked in";
 
           if (status == "approved"){
             $("#divRequests").parent().parent().css("display", "block");
-            $("#divRequests").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + status  + "</td><td><a href='#' onclick='checkIn(" + value + ", " + stayData[0].toNumber() + ")'>check in</a></td></tr>");
+            $("#divRequests").append("<tr id='\"" + index + "\'><td>" + stay[5] + "</td><td>" + status  + "</td><td><a href='#' onclick='checkIn(" + stay[5] + ", " + stay[0].toNumber() + ")'>check in</a></td></tr>");
           }
           else if (status == "checked in"){
             $("#divRequests").parent().parent().css("display", "block");
-            $("#divRequests").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + status  + "</td><td> <a href='#' onclick='checkOut(\"" + value + "\")'>check out</a></td></tr>");
+            $("#divRequests").append("<tr id='\"" + index + "\'><td>" + stay[5] + "</td><td>" + status  + "</td><td> <a href='#' onclick='checkOut(\"" + stay[5] + "\")'>check out</a></td></tr>");
           }
           else if (status != ""){
             $("#divRequests").parent().parent().css("display", "block");
-            $("#divRequests").append("<tr id='\"" + index + "\'><td>" + value + "</td><td>" + status  + "</td><td></td></tr>");
+            $("#divRequests").append("<tr id='\"" + index + "\'><td>" + stay[5] + "</td><td>" + status  + "</td><td></td></tr>");
           }
         }
       });
@@ -188,12 +220,12 @@
       try {
         //get onwers tokenI
         let allTokens = await propertyContract.getProperties({
-          from: $("#ddlOwners").val()
+          from: owner
         });
         let lastToken = Math.max.apply(Math, allTokens);
 
         const tx = await propertyContract.setURI(lastToken, $("#newURI").val(), {
-          from: $("#ddlOwners").val(),
+          from: owner,
           gas: 250000
         });
         console.log(tx);
@@ -207,7 +239,7 @@
     async function createProperty(){
       try {
         const tx = await propertyContract.createProperty({
-          from: $("#ddlOwners").val(),
+          from: owner,
           gas: 250000
         });
         console.log(tx);
@@ -226,7 +258,7 @@
       let price = $("#price_" + tokenId).val();
 
       let tx = await propertyRegistryContract.registerProperty(tokenId, price, {
-        from: $("#ddlOwners").val()
+        from: owner
       })
 
       updateUI();
@@ -243,7 +275,7 @@
 
       try {
         let tx = await propertyRegistryContract.request(tokenId, checkIn, checkOut, {
-          from: $("#ddlOwners").val(),
+          from: owner,
           gas: 250000
         })
         updateUI();
@@ -255,7 +287,7 @@
     async function approveRequest(tokenId, guestAddress){
       try {
         let tx = await propertyRegistryContract.approveRequest(tokenId, guestAddress, {
-          from: $("#ddlOwners").val(),
+          from: owner,
           gas: 250000
         })
         updateUI();
@@ -267,11 +299,11 @@
     async function checkIn(tokenId, price){
       //_mint
       try {
-        await propertyTokenContract.mint($("#ddlOwners").val(), 1000, {from: web3.eth.accounts[0]});
-        await propertyTokenContract.approve(propertyRegistryContract.address, price, {from: $("#ddlOwners").val()});
+        await propertyTokenContract.mint(owner, 1000, {from: web3.eth.accounts[0]});
+        await propertyTokenContract.approve(propertyRegistryContract.address, price, {from: owner});
 
         let tx = await propertyRegistryContract.checkIn(tokenId, {
-          from: $("#ddlOwners").val(),
+          from: owner,
           gas: 250000
         })
         updateUI();
@@ -284,7 +316,7 @@
       //_mint
       try {
         let tx = await propertyRegistryContract.checkOut(tokenId, {
-          from: $("#ddlOwners").val(),
+          from: owner,
           gas: 250000
         })
         updateUI();
@@ -295,7 +327,9 @@
 
     $(document).ready(async() => {
       console.log('start');
+
       await initWeb3();
+      await bindOwners();
 
       let json = await fetch('../build/contracts/Property.json').then((res) => res.json());
       propertyContract = await getContract(json);
@@ -307,7 +341,7 @@
       propertyTokenContract = await getContract(json);
 
       attachEvents();
-      await bindOwners();
+
       updateUI();
 
       let propName = await propertyContract.name();
@@ -316,6 +350,7 @@
 
       $("#btnCreateProperty").click(createProperty);
       $("#ddlOwners").change(function(){
+        owner = $(this).val();
         updateUI();
       });
     });

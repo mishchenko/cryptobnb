@@ -86,7 +86,7 @@ contract PropertyRegistry {
     require(stayData[_tokenId].requests[msg.sender].checkOut > now, "too late to check in");
 
     stayData[_tokenId].occupants.push(msg.sender);
-    stayData[_tokenId].stays++;
+    stayData[_tokenId].stays = stayData[_tokenId].stays + 1;
     emit CheckedIn(_tokenId);
   }
 
@@ -109,17 +109,12 @@ contract PropertyRegistry {
     emit CheckedOut(_tokenId);
   }
 
-  function getStayData(uint256 _tokenId, address _guestAddress) external view returns(uint256, uint256, uint256, address[], address[], address[]){
-      /*uint8 status = 99;
-
-      if (isInArray(stayData[_tokenId].occupants, _guestAddress))
-        status = uint8(GuestType.OCCUPIED);
-      else if (isInArray(stayData[_tokenId].approved, _guestAddress))
-        status = uint8(GuestType.APPROVED);
-      else if (isInArray(stayData[_tokenId].requested, _guestAddress))
-        status = uint8(GuestType.REQUESTED);**/
-
+  function getStayDataDetails(uint256 _tokenId, address _guestAddress) external view returns(uint256, uint256, uint256, address[], address[], address[]){
       return (stayData[_tokenId].price, stayData[_tokenId].requests[_guestAddress].checkIn, stayData[_tokenId].requests[_guestAddress].checkOut, stayData[_tokenId].requested, stayData[_tokenId].approved, stayData[_tokenId].occupants);
+  }
+
+  function getStayData(uint256 _tokenId) external view returns(uint256, address[], address[], address[], uint256){
+      return (stayData[_tokenId].price, stayData[_tokenId].requested, stayData[_tokenId].approved, stayData[_tokenId].occupants, stayData[_tokenId].stays);
   }
 
   //helper functions
