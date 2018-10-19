@@ -7,7 +7,7 @@ contract('PropertyRegistry', async() => {
   let alice = web3.eth.accounts[1];
   let bob = web3.eth.accounts[2];
   let eve = web3.eth.accounts[3];
-  let allocation = 1000;
+  let allocation = 2000;
   let price = 100;
 
   before(async() => {
@@ -39,10 +39,22 @@ contract('PropertyRegistry', async() => {
     });
 
     it('should allow Contract Owner to mint Property Token', async () => {
-      const tx = await propertyToken.mint(bob, allocation);
+      const tx = await propertyToken.bonusTokens(bob, {from: web3.eth.accounts[0]});
       //get the balance of property tokens for bob
       const balance = await propertyToken.balanceOf.call(bob);
       assert(balance.toNumber() === allocation, 'balance is invalid');
+    });
+
+    it('should NOT allow Contract Owner to mint Property Token twice', async () => {
+      try {
+      await propertyToken.bonusTokens(bob, {from: web3.eth.accounts[0]});
+      assert(false, 'minted twice');
+    }catch(e){
+      const balance = await propertyToken.balanceOf.call(bob);
+      assert(balance.toNumber() === allocation, 'balance is invalid');
+    }
+      //get the balance of property tokens for bob
+
     });
 
     it('should allow bob to approve the property registry to use his tokens', async () => {
