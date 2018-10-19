@@ -11,6 +11,7 @@
 
     let web3Provider;
     let propertyContract,propertyRegistryContract, propertyTokenContract;
+    let localWeb3;
     let alice,bob;
     var data;
     let owner;
@@ -20,7 +21,7 @@
         // this will work if a web3 instance has been injected
         // such is the case with Metamask
         web3Provider = web3.currentProvider;
-        owner = web3.eth.accounts[0];
+        setTimeout('owner = web3.eth.accounts[0];', 500);
         $("#ddlOwners").css("display","none");
       }
       else {
@@ -35,6 +36,15 @@
     async function getContract(json, web3 = window.web3) {
       const contract = TruffleContract(json);
       contract.setProvider(web3.currentProvider);
+      return contract.deployed();
+    }
+
+    async function getLocalContract(json){
+      let localProvider = new Web3.providers.HttpProvider('http://localhost:8545');
+      localWeb3 = new Web3(localProvider);
+
+      const contract = TruffleContract(json);
+      contract.setProvider(localWeb3.currentProvider);
       return contract.deployed();
     }
 
@@ -299,7 +309,7 @@
     async function checkIn(tokenId, price){
       //_mint
       try {
-        await propertyTokenContract.mint(owner, 1000, {from: web3.eth.accounts[0]});
+        await propertyTokenContract.bonusTokens(owner, {from: localWeb3.eth.accounts[0]});
         await propertyTokenContract.approve(propertyRegistryContract.address, price, {from: owner});
 
         let tx = await propertyRegistryContract.checkIn(tokenId, {
@@ -338,7 +348,7 @@
       propertyRegistryContract = await getContract(json);
 
       json = await fetch('../build/contracts/PropertyToken.json').then((res) => res.json());
-      propertyTokenContract = await getContract(json);
+      propertyTokenContract = await getLocalContract(json);
 
       attachEvents();
 

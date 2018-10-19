@@ -24,6 +24,7 @@ contract PropertyRegistry {
   }
 
   enum GuestType {REQUESTED, APPROVED, OCCUPIED}
+  uint256 private ALLOCATION  = 100;
 
   event Registered(uint256 indexed _tokenId);
   event Approved(uint256 indexed _tokenId);
@@ -117,7 +118,15 @@ contract PropertyRegistry {
       return (stayData[_tokenId].price, stayData[_tokenId].requested, stayData[_tokenId].approved, stayData[_tokenId].occupants, stayData[_tokenId].stays);
   }
 
-  //helper functions
+  /*function transferBonusTokens(address _guest) public {
+    require(!freeTokens[_guest], 'can not mint more than once');
+    freeTokens[_guest] = true;
+    //??
+    //propertyToken.approve(this, 100);
+    //propertyToken.transfer(_guest, 100);
+  }**/
+
+  //HELPER FUNCTIONS
   //move to different file?
   function getArrayItem(GuestType guestType, uint256 tokenId, uint256 index) public view returns(address){
     if (guestType == GuestType.REQUESTED){
